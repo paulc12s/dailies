@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daily Health Checklist</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f2eb; --surface: #fffef9; --border: #ddd8cc; --text: #1a1814; --muted: #7a7367; --accent: #2d5a3d;
+    --badge-strong-bg: #e8f0ea; --badge-strong-text: #2d5a3d;
+    --badge-mod-bg: #fdf3e3;    --badge-mod-text: #8a5a1a;
+    --badge-weak-bg: #fceaea;   --badge-weak-text: #8a2a2a;
+    --badge-neutral-bg: #f0ede6;--badge-neutral-text: #5a5550;
+  }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+  header { background:var(--surface); border-bottom:1px solid var(--border); padding:1.5rem 0 1.25rem; text-align:center; position:sticky; top:0; z-index:100; }
+  header h1 { font-family:'DM Serif Display',serif; font-size:1.6rem; font-weight:400; letter-spacing:-0.02em; }
+  header h1 span { font-style:italic; color:var(--accent); }
+  .date-bar { font-size:0.72rem; color:var(--muted); margin-top:0.3rem; letter-spacing:0.04em; text-transform:uppercase; }
+  .reset-note { font-size:0.66rem; color:var(--muted); margin-top:0.15rem; opacity:0.65; }
+  .tabs { display:flex; justify-content:center; border-bottom:1px solid var(--border); background:var(--surface); position:sticky; top:82px; z-index:99; }
+  .tab { padding:0.65rem 1.75rem; font-size:0.75rem; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; transition:color 0.2s,border-color 0.2s; user-select:none; }
+  .tab:hover { color:var(--text); }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .panel { display:none; }
+  .panel.active { display:block; }
+  main { max-width:720px; margin:0 auto; padding:1.75rem 1.5rem 4rem; }
+  .cal-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:1.25rem 1.25rem 1rem; margin-bottom:1.75rem; }
+  .cal-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem; }
+  .cal-title { font-size:0.7rem; font-weight:500; letter-spacing:0.08em; text-transform:uppercase; color:var(--muted); }
+  .cal-legend { display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap; }
+  .cal-legend-item { display:flex; align-items:center; gap:0.3rem; font-size:0.62rem; color:var(--muted); }
+  .cal-dot { width:9px; height:9px; border-radius:50%; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+  .cal-day-label { font-size:0.6rem; text-align:center; color:var(--muted); padding-bottom:3px; letter-spacing:0.04em; }
+  .cal-cell { aspect-ratio:1; border-radius:6px; display:flex; align-items:center; justify-content:center; position:relative; }
+  .cal-cell.has-data { cursor:pointer; }
+  .cal-cell.has-data:hover .cal-tooltip { display:block; }
+  .cal-cell-inner { width:100%; height:100%; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:0.6rem; color:var(--muted); border:1px solid var(--border); background:var(--bg); overflow:hidden; }
+  .cal-cell.today .cal-cell-inner { border:2px solid var(--accent); }
+  .cal-tooltip { display:none; position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:var(--text); color:#fff; font-size:0.63rem; padding:5px 8px; border-radius:5px; white-space:nowrap; z-index:200; pointer-events:none; }
+  .cal-tooltip::after { content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:var(--text); }
+  .progress-bar-wrap { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:0.8rem 1rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:1rem; }
+  .progress-label { font-size:0.72rem; color:var(--muted); white-space:nowrap; }
+  .progress-track { flex:1; height:5px; background:var(--border); border-radius:10px; overflow:hidden; }
+  .progress-fill { height:100%; background:var(--accent); border-radius:10px; transition:width 0.35s ease; }
+  .progress-count { font-size:0.72rem; font-weight:500; color:var(--accent); white-space:nowrap; min-width:36px; text-align:right; }
+  .section { margin-bottom:2.25rem; }
+  .section-header { display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem; }
+  .section-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .section-label { font-size:0.68rem; font-weight:500; letter-spacing:0.1em; text-transform:uppercase; color:var(--muted); }
+  .section-line { flex:1; height:1px; background:var(--border); }
+  .item { display:flex; align-items:flex-start; gap:0.875rem; padding:0.875rem 1rem; background:var(--surface); border:1px solid var(--border); border-radius:8px; margin-bottom:0.5rem; cursor:pointer; transition:background 0.15s,border-color 0.15s; user-select:none; }
+  .item:hover { border-color:#ccc6b8; }
+  .item.done { background:#f2f8f4; border-color:#7fb896; border-left:3px solid #2d5a3d; }
+  .checkbox { width:20px; height:20px; min-width:20px; border-radius:5px; border:1.5px solid var(--border); display:flex; align-items:center; justify-content:center; margin-top:1px; transition:background 0.15s,border-color 0.15s; flex-shrink:0; }
+  .item.done .checkbox { background:var(--accent); border-color:var(--accent); }
+  .check-icon { display:none; width:11px; height:11px; }
+  .item.done .check-icon { display:block; }
+  .item-body { flex:1; min-width:0; }
+  .item-top { display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.3rem; }
+  .item-name { font-size:0.95rem; font-weight:500; color:var(--text); transition:color 0.2s; }
+  .item.done .item-name { color:var(--accent); }
+  .item.done .item-summary, .item.done .item-meta { opacity:0.6; }
+  .badge { font-size:0.65rem; font-weight:500; letter-spacing:0.03em; padding:2px 7px; border-radius:20px; white-space:nowrap; }
+  .badge-strong { background:var(--badge-strong-bg); color:var(--badge-strong-text); }
+  .badge-mod    { background:var(--badge-mod-bg);    color:var(--badge-mod-text);    }
+  .badge-weak   { background:var(--badge-weak-bg);   color:var(--badge-weak-text);   }
+  .badge-neutral{ background:var(--badge-neutral-bg);color:var(--badge-neutral-text);}
+  .item-summary { font-size:0.8rem; color:var(--muted); line-height:1.55; transition:opacity 0.2s; }
+  .item-meta    { font-size:0.72rem; color:#a09890; margin-top:0.25rem; transition:opacity 0.2s; }
+  .reset-btn { display:block; margin:0 auto 2rem; font-family:'DM Sans',sans-serif; font-size:0.7rem; font-weight:500; letter-spacing:0.06em; text-transform:uppercase; color:var(--muted); background:none; border:1px solid var(--border); border-radius:6px; padding:0.4rem 1rem; cursor:pointer; transition:color 0.15s,border-color 0.15s; }
+  .reset-btn:hover { color:var(--text); border-color:#bbb5a8; }
+  @media(max-width:480px){
+    header{padding:1.1rem 0 0.9rem;} header h1{font-size:1.3rem;} .tabs{top:70px;}
+    main{padding:1.25rem 0.875rem 3rem;} .item{padding:0.75rem 0.875rem;} .tab{padding:0.6rem 1.1rem;font-size:0.7rem;}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Daily <span>Health</span> Checklist</h1>
+  <div class="date-bar" id="dateBar"></div>
+  <div class="reset-note">Checks reset at 4:00 AM · history saved forever</div>
+</header>
+<div class="tabs">
+  <div class="tab active"  onclick="switchTab('supps',   this)">Supplements</div>
+  <div class="tab"         onclick="switchTab('foods',   this)">Food priorities</div>
+  <div class="tab"         onclick="switchTab('history', this)">History</div>
+</div>
+<main>
+  <div id="supps"   class="panel active"></div>
+  <div id="foods"   class="panel"></div>
+  <div id="history" class="panel"></div>
+</main>
+<script>
+const ITEMS = {
+  supps:[
+    { section:"Daily essentials", dot:"#2d5a3d", items:[
+      {id:"omega3",    name:"Omega-3 (EPA/DHA)",                  ev:"strong", dose:"1–2g · with meal",                  summary:"Best all-around supplement for cardiovascular, brain, and inflammation support — especially important if not eating fish regularly."},
+      {id:"creatine",  name:"Creatine monohydrate",               ev:"strong", dose:"3–5g · anytime",                    summary:"Best evidence-to-cost ratio on this list — supports both brain energy (working memory, processing speed) and physical performance."},
+      {id:"magnesium", name:"Magnesium (L-Threonate or Taurate)", ev:"strong", dose:"100–200mg elemental · evening",     summary:"Corrects a common dietary gap while supporting sleep depth — Taurate adds cardiovascular benefit, Threonate prioritizes cognitive aging."},
+      {id:"glycine",   name:"Glycine",                            ev:"strong", dose:"3g · 30–60 min before bed",         summary:"RCT-supported sleep quality improvement that's inexpensive, safe, and pairs well with magnesium for a meaningful nightly sleep stack."},
+      {id:"vitd",      name:"Vitamin D",                          ev:"strong", dose:"1,000–4,000 IU · morning with fat", summary:"Deficiency is extremely common indoors — supports immune function, mood, bone density, and cardiovascular health. Ideally dose to blood test."},
+    ]},
+    { section:"Situational / rotate as needed", dot:"#3d5a8a", items:[
+      {id:"bcomplex",   name:"Methylated B-complex",     ev:"mod",    dose:"morning",                            summary:"Valuable if your diet has gaps in leafy greens or animal protein — supports methylation, energy, and mood via B6, folate, and B12 cofactors."},
+      {id:"saffron",    name:"Saffron extract",          ev:"mod",    dose:"20–30mg · morning",                  summary:"Surprisingly well-studied for mood support with RCT effects comparable to low-dose SSRIs for mild depression — use during higher-stress periods."},
+      {id:"nac",        name:"NAC",                      ev:"mod",    dose:"600–1,200mg · empty stomach",        summary:"Strong glutathione precursor useful during illness, high oxidative stress, or recovery — chronic daily use in healthy individuals is not well justified."},
+      {id:"probiotics", name:"Probiotics",               ev:"mod",    dose:"5–50B CFU · strain dependent",       summary:"Highly strain-specific benefits — most useful during or after antibiotics, travel, or gut disruption rather than as a constant daily supplement."},
+      {id:"florastor",  name:"Florastor (S. boulardii)", ev:"strong", dose:"250mg 1–2×/day · during antibiotics",summary:"One of the best-supported situational supplements — specifically indicated during antibiotic use to prevent antibiotic-associated diarrhea."},
+    ]},
+    { section:"Low priority / speculative", dot:"#8a5a5a", items:[
+      {id:"nrnmn",    name:"NR / NMN",           ev:"weak", dose:"250–500mg · morning",           summary:"Raises blood NAD+ reliably, but whether that translates to meaningful longevity or cognitive benefit in humans is still unproven."},
+      {id:"tmg",      name:"TMG",                ev:"weak", dose:"500–1,000mg · with NR/NMN",     summary:"Lowers homocysteine biochemically, but clinical cardiovascular event reduction from supplementation has not been demonstrated."},
+      {id:"ginkgo",   name:"Ginkgo biloba",      ev:"weak", dose:"120–240mg · morning",           summary:"Popular for memory, but large-scale trials showed no reduction in dementia incidence — evidence largely disappointing vs. its reputation."},
+      {id:"gaba",     name:"GABA",               ev:"weak", dose:"250–750mg · evening",           summary:"BBB penetration from oral GABA is genuinely controversial — observed calming effects may be peripheral or placebo rather than central."},
+      {id:"bhb",      name:"BHB / ketone salts", ev:"weak", dose:"5–10g · fasted or pre-workout", summary:"Reliably raises circulating ketones, but cognitive benefits in metabolically healthy people are not supported by current RCTs."},
+      {id:"shilajit", name:"Shilajit",           ev:"weak", dose:"250–500mg · morning",           summary:"Mitochondrial claims are largely mechanistic — human RCT data is thin and contamination risk from low-quality sourcing is real."},
+      {id:"gse",      name:"Grape seed extract", ev:"weak", dose:"100–300mg · with meals",        summary:"Strong antioxidant activity in vitro, but meaningful clinical outcomes in healthy people have not been well demonstrated."},
+      {id:"same",     name:"SAMe",               ev:"weak", dose:"200–400mg · morning",           summary:"Some RCT support for depression, but effect sizes are modest, stimulating at higher doses, and expensive relative to alternatives."},
+      {id:"borage",   name:"Borage oil (GLA)",   ev:"weak", dose:"240–400mg GLA · with meals",    summary:"Anti-inflammatory mechanism is plausible, but meaningful clinical evidence in healthy populations is limited."},
+    ]},
+  ],
+  foods:[
+    { section:"Tier 1 — Eat daily if possible", dot:"#2d5a3d", items:[
+      {id:"f-cruciferous", name:"Cruciferous vegetables", ev:"strong", dose:"1–2 cups daily",              meta:"Broccoli · kale · Brussels sprouts · cauliflower · cabbage · bok choy", summary:"Most nutrient-dense vegetable category — sulforaphane activates detox pathways, reduces inflammation, and has documented anti-cancer and cardiovascular properties."},
+      {id:"f-leafygreens", name:"Leafy greens",           ev:"strong", dose:"Large handful daily",         meta:"Spinach · arugula · Swiss chard · collards · romaine · watercress",     summary:"Rich in folate, lutein, zeaxanthin, and vitamin K — consistently linked to slower cognitive decline and lower cardiovascular mortality in large cohort studies."},
+      {id:"f-berries",     name:"Berries",                ev:"strong", dose:"½–1 cup daily (frozen counts)",meta:"Blueberries · strawberries · blackberries · raspberries · pomegranate", summary:"Anthocyanins improve memory, lower blood pressure, and reduce LDL oxidation — blueberries specifically linked to reduced cognitive decline with aging."},
+      {id:"f-evoo",        name:"Extra-virgin olive oil", ev:"strong", dose:"2–4 tbsp daily, raw preferred",meta:"Use raw or low heat · avocado oil for high-heat cooking",              summary:"Polyphenols (especially oleocanthal) have potent anti-inflammatory effects — most strongly evidenced dietary fat for cardiovascular and cognitive longevity."},
+      {id:"f-protein",     name:"Quality protein",        ev:"strong", dose:"0.7–1g per lb bodyweight",    meta:"Eggs · Greek yogurt · fish · poultry · legumes · tofu · tempeh",       summary:"Adequate protein increasingly associated with preserved cognition and physical function in aging — plant and fish sources linked to lower cardiovascular mortality than red meat."},
+      {id:"f-nuts",        name:"Nuts",                   ev:"strong", dose:"1 oz (small handful) daily",  meta:"Walnuts · almonds · pistachios · cashews — walnuts top pick for brain", summary:"Walnuts specifically linked to a 35% reduction in heart disease risk and measurable longevity gains — provide healthy fats, magnesium, protein, and fiber in a low-glycemic package."},
+    ]},
+    { section:"Tier 2 — Several times per week", dot:"#3d5a8a", items:[
+      {id:"f-fish",      name:"Fatty fish",                    ev:"strong", dose:"2–3 servings per week",         meta:"Salmon · sardines · mackerel · herring · trout",                  summary:"Best whole-food source of EPA/DHA — directly supports heart and brain health; sardines also provide calcium, vitamin D, and are low in mercury."},
+      {id:"f-legumes",   name:"Legumes",                       ev:"strong", dose:"½–1 cup cooked, 4–5× per week", meta:"Lentils · chickpeas · black beans · edamame · tofu · tempeh",    summary:"Cornerstone of every longevity diet studied (Blue Zones, Mediterranean, DASH) — high fiber, plant protein, and resistant starch support metabolic and cardiovascular health."},
+      {id:"f-flax",      name:"Flaxseed (ground) or flax oil", ev:"mod",    dose:"1–2 tbsp ground flax daily",    meta:"Ground seeds far better bioavailability than whole",               summary:"Richest plant source of ALA omega-3 and lignans with demonstrated cardiovascular and hormonal benefits — ground seeds significantly outperform whole."},
+      {id:"f-grains",    name:"Whole grains",                  ev:"strong", dose:"2–3 servings daily",             meta:"Oats · quinoa · barley · farro · brown rice · whole wheat",       summary:"Consistently associated with lower all-cause and cardiovascular mortality — fiber, B vitamins, and beta-glucan (oats) drive most of the benefit."},
+      {id:"f-fermented", name:"Fermented foods",               ev:"mod",    dose:"1 serving daily, rotate types",  meta:"Kefir · kimchi · sauerkraut · miso · plain yogurt",               summary:"Live cultures support gut microbiome diversity, increasingly linked to immune function, mood, and metabolic health via the gut-brain axis."},
+      {id:"f-avocado",   name:"Avocado",                       ev:"mod",    dose:"½ avocado, 3–5× per week",       meta:"Whole fruit or as oil",                                           summary:"Dense in monounsaturated fats, potassium, folate, and lutein — regular consumption linked to improved lipid profiles and lower cardiovascular risk."},
+    ]},
+    { section:"Tier 3 — Valuable additions", dot:"#6a4a8a", items:[
+      {id:"f-greentea",  name:"Green tea",              ev:"mod", dose:"1–3 cups daily",          meta:"Matcha or brewed · highest EGCG in matcha",                         summary:"High EGCG concentration linked to cardiovascular, metabolic, and cognitive protection — green tea drinkers show lower dementia and cardiovascular mortality in large Japanese cohorts."},
+      {id:"f-coffee",    name:"Coffee",                 ev:"mod", dose:"1–3 cups before noon",    meta:"Black or lightly prepared · avoid afternoon to protect sleep",      summary:"One of the most replicated associations in nutrition epidemiology — linked to lower risk of Parkinson's, type 2 diabetes, liver disease, and all-cause mortality."},
+      {id:"f-seeds",     name:"Seeds",                  ev:"mod", dose:"1–2 tbsp daily",          meta:"Chia · hemp · pumpkin · sunflower — rotate for variety",            summary:"Nutritional profile similar to nuts but with more protein and trace minerals — chia and hemp are excellent plant-based omega-3 and complete protein sources."},
+      {id:"f-mushrooms", name:"Mushrooms",              ev:"mod", dose:"½–1 cup, 3–4× per week",  meta:"Shiitake · oyster · cremini · lion's mane · maitake",               summary:"Unique source of ergothioneine, beta-glucans for immune modulation, and one of few plant-based sources of vitamin D."},
+      {id:"f-darkchoc",  name:"Dark chocolate (70%+)",  ev:"mod", dose:"1–2 squares daily",       meta:"70% cacao minimum",                                                 summary:"Flavanols support cerebral blood flow and cardiovascular health — regular consumption associated with lower blood pressure and improved cognitive function in RCTs."},
+      {id:"f-alliums",   name:"Alliums",                ev:"mod", dose:"Use daily in cooking",    meta:"Garlic · onions · leeks · shallots · chives",                       summary:"Organosulfur compounds have well-documented cardiovascular, antimicrobial, and anti-cancer properties — let chopped garlic rest 10 min before cooking."},
+      {id:"f-herbs",     name:"Herbs & spices",         ev:"mod", dose:"Use liberally in cooking", meta:"Turmeric · ginger · rosemary · oregano · cinnamon",                summary:"Among the highest antioxidant density of any foods by weight — turmeric and ginger have documented anti-inflammatory effects; cinnamon supports blood sugar regulation."},
+    ]},
+  ]
+};
+
+const ESSENTIAL_SUPP_IDS = ITEMS.supps[0].items.map(i=>i.id);
+const FOOD_IDS            = ITEMS.foods.flatMap(g=>g.items.map(i=>i.id));
+const COUNTED_IDS         = [...ESSENTIAL_SUPP_IDS, ...FOOD_IDS];
+const TOTAL               = COUNTED_IDS.length;
+const EV_LABELS = {strong:"Strong evidence", mod:"Moderate evidence", weak:"Weak evidence"};
+const EV_CLASS  = {strong:"badge-strong",    mod:"badge-mod",         weak:"badge-weak"   };
+
+function readCookie(name){
+  const m=document.cookie.match('(?:^|;)\\s*'+name+'=([^;]*)');
+  if(!m) return null;
+  try{return JSON.parse(decodeURIComponent(m[1]));}catch(e){return null;}
+}
+function writeCookie(name,value,expires){
+  let s=`${name}=${encodeURIComponent(JSON.stringify(value))};path=/`;
+  if(expires) s+=`;expires=${expires.toUTCString()}`;
+  document.cookie=s;
+}
+function logicalBase(){
+  const now=new Date(),base=new Date(now);
+  if(now.getHours()<4) base.setDate(base.getDate()-1);
+  return base;
+}
+function logicalToday(){
+  const b=logicalBase();
+  return `${b.getFullYear()}-${String(b.getMonth()+1).padStart(2,'0')}-${String(b.getDate()).padStart(2,'0')}`;
+}
+function dailyKey(){ return 'hcl_'+logicalToday().replace(/-/g,''); }
+function next4am(){ const t=new Date(); t.setDate(t.getDate()+1); t.setHours(4,0,0,0); return t; }
+const FAR = new Date('2099-01-01');
+
+let state   = readCookie(dailyKey()) || {};
+let history = readCookie('hcl_history') || {};
+
+function saveDaily(){ writeCookie(dailyKey(), state, next4am()); }
+function saveHistory(){
+  const done=COUNTED_IDS.filter(id=>state[id]).length;
+  history[logicalToday()]={done,total:TOTAL};
+  writeCookie('hcl_history', history, FAR);
+}
+
+function updateProgress(){
+  ['supps','foods'].forEach(tab=>{
+    const panel=document.getElementById(tab);
+    if(!panel) return;
+    let done,total;
+    if(tab==='supps'){
+      total=ESSENTIAL_SUPP_IDS.length;
+      done=ESSENTIAL_SUPP_IDS.filter(id=>state[id]).length;
+    } else {
+      total=panel.querySelectorAll('.item').length;
+      done=panel.querySelectorAll('.item.done').length;
+    }
+    const pct=total?Math.round((done/total)*100):0;
+    const fill=panel.querySelector('.progress-fill');
+    const count=panel.querySelector('.progress-count');
+    const label=panel.querySelector('.progress-label');
+    if(fill)  fill.style.width=pct+'%';
+    if(count) count.textContent=`${done}/${total}`;
+    if(label) label.textContent=pct===100?'All done!':"Today's progress";
+  });
+  saveHistory();
+  if(document.getElementById('history').classList.contains('active')) renderHistory();
+}
+
+function toggle(id){
+  state[id]=!state[id];
+  saveDaily();
+  const el=document.querySelector(`[data-id="${id}"]`);
+  if(el) el.classList.toggle('done',!!state[id]);
+  updateProgress();
+}
+
+function buildPanel(tabId){
+  const panel=document.getElementById(tabId);
+  const data=ITEMS[tabId];
+  const pw=document.createElement('div');
+  pw.className='progress-bar-wrap';
+  pw.innerHTML=`<span class="progress-label">Today's progress</span>
+    <div class="progress-track"><div class="progress-fill" style="width:0%"></div></div>
+    <span class="progress-count">0/0</span>`;
+  panel.appendChild(pw);
+  data.forEach(group=>{
+    const sec=document.createElement('div'); sec.className='section';
+    const hdr=document.createElement('div'); hdr.className='section-header';
+    hdr.innerHTML=`<div class="section-dot" style="background:${group.dot}"></div>
+      <span class="section-label">${group.section}</span><div class="section-line"></div>`;
+    sec.appendChild(hdr);
+    group.items.forEach(item=>{
+      const div=document.createElement('div');
+      div.className='item'+(state[item.id]?' done':'');
+      div.setAttribute('data-id',item.id);
+      div.onclick=()=>toggle(item.id);
+      div.innerHTML=`<div class="checkbox"><svg class="check-icon" viewBox="0 0 11 11" fill="none">
+          <polyline points="1.5,5.5 4.5,8.5 9.5,2.5" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg></div>
+        <div class="item-body">
+          <div class="item-top">
+            <span class="item-name">${item.name}</span>
+            <span class="badge ${EV_CLASS[item.ev]}">${EV_LABELS[item.ev]}</span>
+            ${item.dose?`<span class="badge badge-neutral">${item.dose}</span>`:''}
+          </div>
+          <div class="item-summary">${item.summary}</div>
+          ${item.meta?`<div class="item-meta">${item.meta}</div>`:''}
+        </div>`;
+      sec.appendChild(div);
+    });
+    panel.appendChild(sec);
+  });
+  const btn=document.createElement('button'); btn.className='reset-btn'; btn.textContent='Clear all checks';
+  btn.onclick=()=>{
+    data.flatMap(g=>g.items.map(i=>i.id)).forEach(id=>{state[id]=false;});
+    saveDaily();
+    panel.querySelectorAll('.item').forEach(el=>el.classList.remove('done'));
+    updateProgress();
+  };
+  panel.appendChild(btn);
+}
+
+function pctColor(pct){
+  if(pct===0) return '#e8e4dc';
+  if(pct<33)  return '#f5c8a0';
+  if(pct<66)  return '#a8d4b0';
+  return '#2d5a3d';
+}
+function drawPieSvg(pct,size){
+  const r=14,cx=16,cy=16,circ=2*Math.PI*r,filled=(pct/100)*circ,fg=pctColor(pct);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 32 32" style="display:block">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="#e8e4dc"/>
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${fg}" stroke-width="32"
+      stroke-dasharray="${filled} ${circ-filled}"
+      style="transform:rotate(-90deg);transform-origin:${cx}px ${cy}px"/>
+  </svg>`;
+}
+function calcStreak(){
+  let streak=0;
+  const cursor=new Date(logicalToday()+'T12:00:00');
+  for(let i=0;i<365;i++){
+    const k=`${cursor.getFullYear()}-${String(cursor.getMonth()+1).padStart(2,'0')}-${String(cursor.getDate()).padStart(2,'0')}`;
+    if(history[k]&&history[k].done>0){ streak++; cursor.setDate(cursor.getDate()-1); } else break;
+  }
+  return streak;
+}
+
+function renderHistory(){
+  const panel=document.getElementById('history');
+  panel.innerHTML='';
+  const today=logicalToday();
+  const todayD=new Date(today+'T12:00:00');
+
+  const calWrap=document.createElement('div'); calWrap.className='cal-wrap';
+  calWrap.innerHTML=`<div class="cal-header">
+    <span class="cal-title">35-day history</span>
+    <div class="cal-legend">
+      <div class="cal-legend-item"><div class="cal-dot" style="background:#e8e4dc;border:1px solid #ccc6b8"></div>No data</div>
+      <div class="cal-legend-item"><div class="cal-dot" style="background:#f5c8a0"></div>&lt;33%</div>
+      <div class="cal-legend-item"><div class="cal-dot" style="background:#a8d4b0"></div>33–65%</div>
+      <div class="cal-legend-item"><div class="cal-dot" style="background:#2d5a3d"></div>66%+</div>
+    </div></div>`;
+
+  const grid=document.createElement('div'); grid.className='cal-grid';
+  ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach(d=>{
+    const l=document.createElement('div'); l.className='cal-day-label'; l.textContent=d; grid.appendChild(l);
+  });
+  const startD=new Date(todayD); startD.setDate(todayD.getDate()-todayD.getDay()-28);
+  for(let i=0;i<35;i++){
+    const d=new Date(startD); d.setDate(startD.getDate()+i);
+    const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const rec=history[k], isToday=k===today, isFuture=d>todayD;
+    const cell=document.createElement('div');
+    cell.className='cal-cell'+(isToday?' today':'');
+    if(isFuture){
+      cell.innerHTML='<div class="cal-cell-inner" style="border-color:transparent;background:transparent"></div>';
+    } else if(rec){
+      const pct=Math.round((rec.done/rec.total)*100),col=pctColor(pct);
+      cell.classList.add('has-data');
+      cell.innerHTML=`<div class="cal-cell-inner" style="background:${col};border-color:${col};padding:0">${drawPieSvg(pct,'100%')}</div>
+        <div class="cal-tooltip">${d.toLocaleDateString('en-US',{month:'short',day:'numeric'})} · ${rec.done}/${rec.total} (${pct}%)</div>`;
+    } else {
+      cell.innerHTML=`<div class="cal-cell-inner" style="font-size:0.58rem;color:#c0bbb4">${d.getDate()}</div>`;
+    }
+    grid.appendChild(cell);
+  }
+  calWrap.appendChild(grid);
+  panel.appendChild(calWrap);
+
+  const keys=Object.keys(history).sort();
+  if(!keys.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 0';
+    empty.textContent='No history yet — start checking off items to build your record.';
+    panel.appendChild(empty); return;
+  }
+  const pcts=keys.map(k=>Math.round((history[k].done/history[k].total)*100));
+  const avgPct=Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length);
+  const statsWrap=document.createElement('div');
+  statsWrap.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1.5rem';
+  [{label:'Avg',value:avgPct+'%'},{label:'Best day',value:Math.max(...pcts)+'%'},
+   {label:'Streak',value:calcStreak()+' days'},{label:'Days logged',value:keys.length}
+  ].forEach(s=>{
+    const c=document.createElement('div');
+    c.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.75rem 0.5rem;text-align:center';
+    c.innerHTML=`<div style="font-size:0.6rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted);margin-bottom:0.3rem">${s.label}</div>
+      <div style="font-size:1.25rem;font-weight:500;color:var(--accent)">${s.value}</div>`;
+    statsWrap.appendChild(c);
+  });
+  panel.appendChild(statsWrap);
+
+  const logTitle=document.createElement('div');
+  logTitle.style.cssText='font-size:0.68rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:0.6rem';
+  logTitle.textContent='Recent days';
+  panel.appendChild(logTitle);
+
+  keys.slice().reverse().slice(0,14).forEach(k=>{
+    const rec=history[k],pct=Math.round((rec.done/rec.total)*100),col=pctColor(pct);
+    const date=new Date(k+'T12:00:00'),isHistToday=k===today;
+    const label=date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    const row=document.createElement('div');
+    row.style.cssText=`display:flex;align-items:center;gap:0.75rem;padding:0.55rem 0.875rem;
+      background:${isHistToday?'#f2f8f4':'var(--surface)'};
+      border:1px solid ${isHistToday?'#7fb896':'var(--border)'};
+      ${isHistToday?'border-left:3px solid #2d5a3d;':''}
+      border-radius:8px;margin-bottom:0.4rem`;
+    row.innerHTML=`<div style="flex-shrink:0">${drawPieSvg(pct,24)}</div>
+      <span style="font-size:0.8rem;color:var(--text);flex:1">${label}${isHistToday?' <span style="font-size:0.65rem;color:var(--accent)">today</span>':''}</span>
+      <span style="font-size:0.78rem;color:var(--muted)">${rec.done}/${rec.total}</span>
+      <span style="font-size:0.8rem;font-weight:500;color:${pct>=66?'var(--accent)':pct>=33?'#7a6a40':'#8a4a30'};min-width:32px;text-align:right">${pct}%</span>
+      <div style="width:60px;height:4px;background:var(--border);border-radius:4px;overflow:hidden;flex-shrink:0">
+        <div style="height:100%;width:${pct}%;background:${col};border-radius:4px"></div>
+      </div>`;
+    panel.appendChild(row);
+  });
+}
+
+function switchTab(tabId,el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  el.classList.add('active');
+  if(tabId==='history') renderHistory();
+}
+
+document.getElementById('dateBar').textContent=
+  new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+buildPanel('supps');
+buildPanel('foods');
+updateProgress();
+</script>
+</body>
+</html>

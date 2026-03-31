@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<!--
+  MODERN TASK MANAGER
+
+  A secure, performant personal task management application
+
+  Features:
+  - IndexedDB for persistent local storage
+  - Optional Dropbox cloud sync (user-configured)
+  - Comprehensive XSS protection
+  - Modern ES6+ JavaScript
+  - No inline event handlers
+  - Content Security Policy
+
+  Security:
+  - All user input sanitized and escaped
+  - URL validation to prevent malicious links
+  - CSP headers restrict script execution
+  - Import/export data validation
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.dropbox.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://www.dropbox.com https://*.dropboxusercontent.com; frame-src https://www.dropbox.com;">
+<title>Task Manager</title>
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: #f9f8f6;
+  color: #1a1714;
+  padding: 24px;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 1.5rem;
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 500;
+  flex: 1;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn {
+  font-size: 13px;
+  padding: 6px 16px;
+  cursor: pointer;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  color: #1a1714;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  border-color: #888;
+  background: #fafafa;
+}
+
+.btn-icon {
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+}
+
+.btn-icon:hover {
+  opacity: 0.7;
+}
+
+.status {
+  font-size: 12px;
+  color: #888;
+}
+
+.status.success {
+  color: #3b6d11;
+}
+
+/* Add Task Form */
+.add-form {
+  background: #f0ede8;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 1rem;
+  display: none;
+}
+
+.add-form.visible {
+  display: block;
+}
+
+.form-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.form-row:last-child {
+  margin-bottom: 0;
+}
+
+.form-row input[type="text"],
+.form-row input[type="date"],
+.form-row select {
+  font-size: 14px;
+  padding: 7px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: white;
+  font-family: inherit;
+}
+
+.form-row input[type="text"] {
+  flex: 1;
+}
+
+.form-row select {
+  width: 110px;
+}
+
+.form-row input[type="date"] {
+  width: 150px;
+}
+
+.form-row label {
+  font-size: 12px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Filters */
+.filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.filter-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid #ddd;
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  border-color: #bbb;
+}
+
+.filter-btn.active {
+  background: #1a1714;
+  border-color: #1a1714;
+  color: white;
+  font-weight: 500;
+}
+
+.filter-btn.immediate {
+  border-color: #e24b4a;
+  color: #a32d2d;
+}
+
+.filter-btn.immediate.active {
+  background: #a32d2d;
+  border-color: #a32d2d;
+  color: white;
+}
+
+/* Tasks */
+.task-group-label {
+  font-size: 11px;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 8px 0 6px;
+  border-bottom: 1px solid #e0ddd8;
+  margin-bottom: 6px;
+  margin-top: 16px;
+}
+
+.task-group-label:first-of-type {
+  margin-top: 0;
+}
+
+.task-group-label.immediate {
+  color: #a32d2d;
+  border-bottom-color: #f09595;
+}
+
+.task {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  border: 1px solid #e0ddd8;
+  background: white;
+  margin-bottom: 5px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.task:hover {
+  border-color: #bbb;
+}
+
+.task.done {
+  opacity: 0.5;
+}
+
+.task.immediate {
+  border-left: 3px solid #e24b4a;
+}
+
+.task.editing {
+  border-color: #888;
+  background: #fafafa;
+}
+
+.task-checkbox {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.task-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-title {
+  font-size: 14px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.task.done .task-title {
+  text-decoration: line-through;
+  color: #aaa;
+}
+
+.task-link {
+  font-size: 11px;
+  color: #3b6d11;
+  margin-left: 4px;
+  text-decoration: none;
+}
+
+.task-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.badge.high {
+  background: #FCEBEB;
+  color: #A32D2D;
+}
+
+.badge.med {
+  background: #FAEEDA;
+  color: #854F0B;
+}
+
+.badge.low {
+  background: #EAF3DE;
+  color: #3B6D11;
+}
+
+.badge.due {
+  background: #f0ede8;
+  color: #888;
+  border: 1px solid #ddd;
+}
+
+.badge.due-soon {
+  background: #FAEEDA;
+  color: #854F0B;
+}
+
+.badge.overdue {
+  background: #FCEBEB;
+  color: #A32D2D;
+}
+
+.task-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.task:hover .task-actions,
+.task.editing .task-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  font-size: 12px;
+  color: #888;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  padding: 3px 7px;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  border-color: #ccc;
+  color: #333;
+  background: #f5f5f5;
+}
+
+.action-btn.delete:hover {
+  color: #a32d2d;
+  border-color: #f09595;
+}
+
+.action-btn.save {
+  color: #3b6d11;
+}
+
+.action-btn.save:hover {
+  border-color: #b8d4b8;
+  background: #eaf3de;
+}
+
+/* Edit Mode */
+.edit-fields {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.edit-row input[type="text"],
+.edit-row input[type="date"],
+.edit-row select {
+  font-size: 13px;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-family: inherit;
+}
+
+.edit-row input[type="text"] {
+  flex: 1;
+  min-width: 120px;
+}
+
+.edit-row label {
+  font-size: 12px;
+  color: #888;
+  white-space: nowrap;
+}
+
+/* Stats */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e0ddd8;
+}
+
+.stat-card {
+  background: #f0ede8;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 500;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 2rem;
+  color: #aaa;
+  font-size: 14px;
+}
+
+/* Modal */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.visible {
+  display: flex;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  font-size: 18px;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.modal-body {
+  margin-bottom: 20px;
+}
+
+.modal-body label {
+  display: block;
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 6px;
+}
+
+.modal-body input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: monospace;
+}
+
+.modal-hint {
+  font-size: 12px;
+  color: #888;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+.modal-hint a {
+  color: #3b6d11;
+}
+
+.modal-hint ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modal-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid #ddd;
+  background: white;
+  transition: all 0.2s;
+}
+
+.modal-btn:hover {
+  opacity: 0.9;
+}
+
+.modal-btn.primary {
+  background: #1a1714;
+  color: white;
+  border-color: #1a1714;
+}
+
+/* Hidden */
+.hidden {
+  display: none;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header class="header">
+    <h1>Tasks</h1>
+    <div class="header-actions">
+      <button class="btn" id="add-btn">+ Add</button>
+      <button class="btn" id="export-btn">Export</button>
+      <button class="btn" id="import-btn">Import</button>
+      <button class="btn" id="dropbox-save-btn">💾 Dropbox</button>
+      <button class="btn" id="dropbox-load-btn">📂 Load</button>
+      <input type="file" id="import-file" accept=".json" class="hidden">
+      <button class="btn-icon" id="settings-btn" title="Settings">⚙️</button>
+      <span class="status" id="status">loading...</span>
+    </div>
+  </header>
+
+  <div class="add-form" id="add-form">
+    <div class="form-row">
+      <input type="text" id="task-title" placeholder="Add a task...">
+      <select id="task-priority">
+        <option value="high">High</option>
+        <option value="med" selected>Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <input type="text" id="task-category" list="category-list" placeholder="Category" style="width:130px" autocomplete="off">
+      <datalist id="category-list"></datalist>
+      <button class="btn" id="save-task-btn">Save</button>
+      <button class="btn" id="cancel-task-btn" style="background: #f0ede8;">Cancel</button>
+    </div>
+    <div class="form-row">
+      <label>Complete by: <input type="date" id="task-due"></label>
+    </div>
+  </div>
+
+  <div class="filters" id="filters"></div>
+  <div id="task-list"></div>
+  <div class="stats" id="stats"></div>
+</div>
+
+<div class="modal" id="settings-modal">
+  <div class="modal-content">
+    <div class="modal-header">Settings</div>
+    <div class="modal-body">
+      <label>Dropbox App Key (optional)</label>
+      <input type="text" id="dropbox-key" placeholder="Enter your Dropbox App Key">
+      <div class="modal-hint">
+        To enable Dropbox sync:
+        <ol>
+          <li>Go to <a href="https://www.dropbox.com/developers/apps" target="_blank" rel="noopener noreferrer">Dropbox Developers</a></li>
+          <li>Create app → "Scoped access" → "Full Dropbox"</li>
+          <li>Add domain to "Chooser domains" (use "localhost" for local testing)</li>
+          <li>Copy the App Key and paste it above</li>
+        </ol>
+        Leave empty to use local export/import only.
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="modal-btn" id="cancel-settings-btn">Cancel</button>
+      <button class="modal-btn primary" id="save-settings-btn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================================
+// Constants & Configuration
+// ============================================================================
+
+const CONFIG = {
+  STORAGE: {
+    ACTIVE_KEY: 'tasks_active_v5',
+    DONE_KEY: 'tasks_done_v5',
+    DROPBOX_KEY: 'dropbox_app_key',
+    DB_NAME: 'TasksDB',
+    DB_VERSION: 1,
+    STORE_NAME: 'tasks'
+  },
+  LIMITS: {
+    MAX_TITLE_LENGTH: 500,
+    MAX_CATEGORY_LENGTH: 100,
+    MAX_URL_LENGTH: 2000,
+    MAX_FILE_SIZE: 10 * 1024 * 1024 // 10MB
+  },
+  CATEGORIES: {
+    IMMEDIATE: 'Immediate'
+  },
+  PRIORITIES: ['high', 'med', 'low']
+};
+
+// ============================================================================
+// State Management
+// ============================================================================
+
+const state = {
+  tasks: [],
+  filter: 'all',
+  editingId: null,
+  db: null,
+  dropboxScriptLoaded: false
+};
+
+// ============================================================================
+// Security & Validation
+// ============================================================================
+
+const Security = {
+  escapeHtml(str) {
+    if (typeof str !== 'string') return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  },
+
+  escapeAttr(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/[&<>"']/g, char => {
+      const entities = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      };
+      return entities[char] || char;
+    });
+  },
+
+  isSafeUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+    const trimmed = url.trim().toLowerCase();
+    const dangerousProtocols = ['javascript:', 'data:', 'vbscript:', 'file:', 'about:'];
+
+    for (const protocol of dangerousProtocols) {
+      if (trimmed.startsWith(protocol)) return false;
+    }
+
+    return trimmed.startsWith('http://') ||
+           trimmed.startsWith('https://') ||
+           trimmed.startsWith('//') ||
+           trimmed.startsWith('/');
+  },
+
+  validateDate(dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') return false;
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(dateStr)) return false;
+    const date = new Date(dateStr + 'T00:00:00');
+    return date instanceof Date && !isNaN(date);
+  },
+
+  sanitizeTask(task) {
+    if (!task || typeof task !== 'object') return null;
+
+    return {
+      id: String(task.id || Date.now()),
+      title: String(task.title || '').substring(0, CONFIG.LIMITS.MAX_TITLE_LENGTH),
+      priority: CONFIG.PRIORITIES.includes(task.priority) ? task.priority : 'med',
+      category: String(task.category || '').substring(0, CONFIG.LIMITS.MAX_CATEGORY_LENGTH),
+      done: Boolean(task.done),
+      due: this.validateDate(task.due) ? task.due : '',
+      url: this.isSafeUrl(task.url) ? String(task.url).substring(0, CONFIG.LIMITS.MAX_URL_LENGTH) : ''
+    };
+  },
+
+  sanitizeTasks(tasksArray) {
+    if (!Array.isArray(tasksArray)) return [];
+    return tasksArray.map(t => this.sanitizeTask(t)).filter(t => t !== null);
+  }
+};
+
+// ============================================================================
+// Database Operations
+// ============================================================================
+
+const Database = {
+  async init() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(CONFIG.STORAGE.DB_NAME, CONFIG.STORAGE.DB_VERSION);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        state.db = request.result;
+        resolve(state.db);
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = event.target.result;
+        if (!db.objectStoreNames.contains(CONFIG.STORAGE.STORE_NAME)) {
+          db.createObjectStore(CONFIG.STORAGE.STORE_NAME);
+        }
+      };
+    });
+  },
+
+  async save(key, value) {
+    if (!state.db) throw new Error('Database not initialized');
+    return new Promise((resolve, reject) => {
+      const transaction = state.db.transaction([CONFIG.STORAGE.STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(CONFIG.STORAGE.STORE_NAME);
+      const request = store.put(value, key);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  async load(key) {
+    if (!state.db) throw new Error('Database not initialized');
+    return new Promise((resolve, reject) => {
+      const transaction = state.db.transaction([CONFIG.STORAGE.STORE_NAME], 'readonly');
+      const store = transaction.objectStore(CONFIG.STORAGE.STORE_NAME);
+      const request = store.get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  },
+
+  async delete(key) {
+    if (!state.db) throw new Error('Database not initialized');
+    return new Promise((resolve, reject) => {
+      const transaction = state.db.transaction([CONFIG.STORAGE.STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(CONFIG.STORAGE.STORE_NAME);
+      const request = store.delete(key);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+};
+
+// ============================================================================
+// Cookie Backup (Fallback Storage)
+// ============================================================================
+
+const CookieStorage = {
+  set(name, value, days = 365) {
+    const expires = new Date(Date.now() + days * 864e5).toUTCString();
+    document.cookie = `${name}=${encodeURIComponent(value)}; expires=${expires}; path=/; SameSite=Lax`;
+  },
+
+  get(name) {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? decodeURIComponent(match[2]) : null;
+  }
+};
+
+// ============================================================================
+// Task Operations
+// ============================================================================
+
+const TaskManager = {
+  async load() {
+    try {
+      await Database.init();
+
+      // Try IndexedDB first
+      const activeData = await Database.load(CONFIG.STORAGE.ACTIVE_KEY);
+      const doneData = await Database.load(CONFIG.STORAGE.DONE_KEY);
+
+      if (activeData || doneData) {
+        const activeTasks = activeData ? JSON.parse(activeData) : [];
+        const doneTasks = doneData ? JSON.parse(doneData) : [];
+        state.tasks = Security.sanitizeTasks([...activeTasks, ...doneTasks]);
+      } else {
+        // Fallback to cookies
+        const cookieActive = CookieStorage.get(CONFIG.STORAGE.ACTIVE_KEY);
+        const cookieDone = CookieStorage.get(CONFIG.STORAGE.DONE_KEY);
+
+        if (cookieActive || cookieDone) {
+          const activeTasks = cookieActive ? JSON.parse(cookieActive) : [];
+          const doneTasks = cookieDone ? JSON.parse(cookieDone) : [];
+          state.tasks = Security.sanitizeTasks([...activeTasks, ...doneTasks]);
+        } else {
+          state.tasks = [];
+        }
+      }
+
+      await this.save(true);
+    } catch (error) {
+      console.error('Load error:', error);
+      state.tasks = [];
+    }
+
+    UI.render();
+  },
+
+  async save(silent = false) {
+    if (!silent) UI.setStatus('saving...', false);
+
+    try {
+      const activeTasks = state.tasks.filter(t => !t.done);
+      const doneTasks = state.tasks.filter(t => t.done);
+
+      // Save to IndexedDB
+      await Database.save(CONFIG.STORAGE.ACTIVE_KEY, JSON.stringify(activeTasks));
+      await Database.save(CONFIG.STORAGE.DONE_KEY, JSON.stringify(doneTasks));
+
+      // Backup to cookies
+      CookieStorage.set(CONFIG.STORAGE.ACTIVE_KEY, JSON.stringify(activeTasks));
+      CookieStorage.set(CONFIG.STORAGE.DONE_KEY, JSON.stringify(doneTasks));
+
+      UI.setStatus('saved', true);
+    } catch (error) {
+      console.error('Save error:', error);
+      UI.setStatus('error', false);
+    }
+  },
+
+  scheduleSave() {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => this.save(false), 500);
+  },
+
+  add(taskData) {
+    const newTask = Security.sanitizeTask(taskData);
+    if (!newTask) {
+      UI.setStatus('invalid task data', false);
+      return false;
+    }
+
+    state.tasks.unshift(newTask);
+    this.scheduleSave();
+    return true;
+  },
+
+  update(id, updates) {
+    const task = state.tasks.find(t => t.id === id);
+    if (!task) return false;
+
+    const sanitized = Security.sanitizeTask({ ...task, ...updates });
+    if (!sanitized) {
+      UI.setStatus('invalid task data', false);
+      return false;
+    }
+
+    Object.assign(task, sanitized);
+    this.scheduleSave();
+    return true;
+  },
+
+  toggle(id) {
+    const task = state.tasks.find(t => t.id === id);
+    if (task) {
+      task.done = !task.done;
+      state.editingId = null;
+      this.scheduleSave();
+      UI.render();
+    }
+  },
+
+  delete(id) {
+    state.tasks = state.tasks.filter(t => t.id !== id);
+    state.editingId = null;
+    this.scheduleSave();
+    UI.render();
+  },
+
+  getFiltered() {
+    const { tasks, filter } = state;
+
+    if (filter === 'done') {
+      return tasks.filter(t => t.done);
+    }
+
+    if (filter === 'all') {
+      return tasks.filter(t => !t.done);
+    }
+
+    if (filter === 'due-soon') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return tasks.filter(t => {
+        if (t.done || !t.due) return false;
+        const dueDate = new Date(t.due + 'T00:00:00');
+        const diff = Math.round((dueDate - today) / 86400000);
+        return diff <= 7;
+      });
+    }
+
+    // Priority or category filter
+    if (CONFIG.PRIORITIES.includes(filter)) {
+      return tasks.filter(t => t.priority === filter && !t.done);
+    }
+
+    return tasks.filter(t => t.category === filter && !t.done);
+  },
+
+  export() {
+    const activeTasks = state.tasks.filter(t => !t.done);
+    const doneTasks = state.tasks.filter(t => t.done);
+
+    const data = {
+      active: activeTasks,
+      completed: doneTasks,
+      exportDate: new Date().toISOString()
+    };
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tasks-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    UI.setStatus('exported', true);
+    setTimeout(() => UI.setStatus('saved', true), 2000);
+  },
+
+  import(fileData) {
+    try {
+      const data = JSON.parse(fileData);
+
+      let importedTasks = [];
+      if (data.active || data.completed) {
+        importedTasks = [...(data.active || []), ...(data.completed || [])];
+      } else if (Array.isArray(data)) {
+        importedTasks = data;
+      } else {
+        throw new Error('Invalid format');
+      }
+
+      const sanitized = Security.sanitizeTasks(importedTasks);
+      if (sanitized.length === 0) {
+        throw new Error('No valid tasks found');
+      }
+
+      state.tasks = sanitized;
+      this.save(false);
+      UI.render();
+      UI.setStatus(`imported ${sanitized.length} tasks`, true);
+      setTimeout(() => UI.setStatus('saved', true), 2000);
+      return true;
+    } catch (error) {
+      console.error('Import error:', error);
+      UI.setStatus('import failed - invalid data', false);
+      setTimeout(() => UI.setStatus('saved', true), 3000);
+      return false;
+    }
+  }
+};
+
+// ============================================================================
+// Dropbox Integration
+// ============================================================================
+
+const Dropbox = {
+  async loadScript() {
+    if (state.dropboxScriptLoaded && typeof window.Dropbox !== 'undefined') {
+      return true;
+    }
+
+    const appKey = await Database.load(CONFIG.STORAGE.DROPBOX_KEY);
+    if (!appKey) {
+      const setup = confirm('Dropbox is not configured. Would you like to set it up now?');
+      if (setup) {
+        UI.showSettings();
+      }
+      return false;
+    }
+
+    // Validate key format
+    if (!/^[a-zA-Z0-9_-]+$/.test(appKey)) {
+      console.error('Invalid Dropbox key format');
+      UI.setStatus('invalid Dropbox key', false);
+      return false;
+    }
+
+    return new Promise((resolve) => {
+      const oldScript = document.getElementById('dropboxjs');
+      if (oldScript) oldScript.remove();
+
+      const script = document.createElement('script');
+      script.type = 'text/javascript';
+      script.src = 'https://www.dropbox.com/static/api/2/dropins.js';
+      script.id = 'dropboxjs';
+      script.setAttribute('data-app-key', appKey);
+      script.onload = () => {
+        state.dropboxScriptLoaded = true;
+        resolve(true);
+      };
+      script.onerror = () => {
+        console.error('Failed to load Dropbox script');
+        UI.setStatus('Dropbox script load failed', false);
+        resolve(false);
+      };
+      document.head.appendChild(script);
+    });
+  },
+
+  async save() {
+    try {
+      const loaded = await this.loadScript();
+      if (!loaded) return;
+
+      const activeTasks = state.tasks.filter(t => !t.done);
+      const doneTasks = state.tasks.filter(t => t.done);
+      const data = {
+        active: activeTasks,
+        completed: doneTasks,
+        exportDate: new Date().toISOString()
+      };
+
+      const jsonString = JSON.stringify(data, null, 2);
+      const filename = `tasks-${new Date().toISOString().split('T')[0]}.json`;
+
+      UI.setStatus('preparing Dropbox save...', false);
+
+      if (typeof window.Dropbox !== 'undefined' && window.Dropbox.save) {
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const reader = new FileReader();
+        reader.onloadend = function() {
+          window.Dropbox.save({
+            files: [{
+              url: reader.result,
+              filename: filename
+            }],
+            success: function() {
+              UI.setStatus('saved to Dropbox', true);
+              setTimeout(() => UI.setStatus('saved', true), 2000);
+            },
+            error: function(errorMessage) {
+              console.error('Dropbox save error:', errorMessage);
+              UI.setStatus('Dropbox save failed', false);
+              setTimeout(() => UI.setStatus('saved', true), 3000);
+            }
+          });
+        };
+        reader.readAsDataURL(blob);
+      } else {
+        UI.setStatus('Dropbox not available', false);
+        setTimeout(() => UI.setStatus('saved', true), 2000);
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      UI.setStatus('export failed', false);
+      setTimeout(() => UI.setStatus('saved', true), 3000);
+    }
+  },
+
+  async load() {
+    try {
+      const loaded = await this.loadScript();
+      if (!loaded) return;
+
+      if (typeof window.Dropbox !== 'undefined' && window.Dropbox.choose) {
+        window.Dropbox.choose({
+          success: async function(files) {
+            if (files && files.length > 0) {
+              const file = files[0];
+
+              if (file.bytes && file.bytes > CONFIG.LIMITS.MAX_FILE_SIZE) {
+                UI.setStatus('file too large', false);
+                setTimeout(() => UI.setStatus('saved', true), 2000);
+                return;
+              }
+
+              UI.setStatus('loading from Dropbox...', false);
+
+              try {
+                const response = await fetch(file.link);
+                if (!response.ok) throw new Error('Network error');
+                const text = await response.text();
+                TaskManager.import(text);
+              } catch (error) {
+                console.error('Dropbox load error:', error);
+                UI.setStatus('Dropbox load failed', false);
+                setTimeout(() => UI.setStatus('saved', true), 3000);
+              }
+            }
+          },
+          cancel: function() {
+            UI.setStatus('cancelled', false);
+            setTimeout(() => UI.setStatus('saved', true), 2000);
+          },
+          linkType: 'direct',
+          multiselect: false,
+          extensions: ['.json']
+        });
+      } else {
+        UI.setStatus('Dropbox not available', false);
+        setTimeout(() => UI.setStatus('saved', true), 2000);
+      }
+    } catch (error) {
+      console.error('Dropbox error:', error);
+      UI.setStatus('Dropbox error', false);
+      setTimeout(() => UI.setStatus('saved', true), 2000);
+    }
+  }
+};
+
+// ============================================================================
+// UI Rendering & Interaction
+// ============================================================================
+
+const UI = {
+  elements: {},
+
+  init() {
+    // Cache DOM elements
+    this.elements = {
+      addBtn: document.getElementById('add-btn'),
+      exportBtn: document.getElementById('export-btn'),
+      importBtn: document.getElementById('import-btn'),
+      importFile: document.getElementById('import-file'),
+      dropboxSaveBtn: document.getElementById('dropbox-save-btn'),
+      dropboxLoadBtn: document.getElementById('dropbox-load-btn'),
+      settingsBtn: document.getElementById('settings-btn'),
+      status: document.getElementById('status'),
+      addForm: document.getElementById('add-form'),
+      taskTitle: document.getElementById('task-title'),
+      taskPriority: document.getElementById('task-priority'),
+      taskCategory: document.getElementById('task-category'),
+      taskDue: document.getElementById('task-due'),
+      saveTaskBtn: document.getElementById('save-task-btn'),
+      cancelTaskBtn: document.getElementById('cancel-task-btn'),
+      categoryList: document.getElementById('category-list'),
+      filters: document.getElementById('filters'),
+      taskList: document.getElementById('task-list'),
+      stats: document.getElementById('stats'),
+      settingsModal: document.getElementById('settings-modal'),
+      dropboxKey: document.getElementById('dropbox-key'),
+      saveSettingsBtn: document.getElementById('save-settings-btn'),
+      cancelSettingsBtn: document.getElementById('cancel-settings-btn')
+    };
+
+    this.attachEventListeners();
+  },
+
+  attachEventListeners() {
+    // Header actions
+    this.elements.addBtn.addEventListener('click', () => this.toggleAddForm());
+    this.elements.exportBtn.addEventListener('click', () => TaskManager.export());
+    this.elements.importBtn.addEventListener('click', () => this.elements.importFile.click());
+    this.elements.dropboxSaveBtn.addEventListener('click', () => Dropbox.save());
+    this.elements.dropboxLoadBtn.addEventListener('click', () => Dropbox.load());
+    this.elements.settingsBtn.addEventListener('click', () => this.showSettings());
+
+    // Import file
+    this.elements.importFile.addEventListener('change', (e) => this.handleImport(e));
+
+    // Add form
+    this.elements.saveTaskBtn.addEventListener('click', () => this.handleAddTask());
+    this.elements.cancelTaskBtn.addEventListener('click', () => this.toggleAddForm());
+    this.elements.taskTitle.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.handleAddTask();
+    });
+    this.elements.taskCategory.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.handleAddTask();
+    });
+
+    // Settings modal
+    this.elements.saveSettingsBtn.addEventListener('click', () => this.saveSettings());
+    this.elements.cancelSettingsBtn.addEventListener('click', () => this.hideSettings());
+    this.elements.settingsModal.addEventListener('click', (e) => {
+      if (e.target === this.elements.settingsModal) this.hideSettings();
+    });
+
+    // Task list (delegated events)
+    this.elements.taskList.addEventListener('click', (e) => this.handleTaskClick(e));
+    this.elements.taskList.addEventListener('dblclick', (e) => this.handleTaskDblClick(e));
+    this.elements.taskList.addEventListener('change', (e) => this.handleTaskChange(e));
+    this.elements.taskList.addEventListener('keydown', (e) => this.handleTaskKeydown(e));
+  },
+
+  toggleAddForm() {
+    const isVisible = this.elements.addForm.classList.contains('visible');
+
+    if (isVisible) {
+      this.elements.addForm.classList.remove('visible');
+    } else {
+      this.elements.addForm.classList.add('visible');
+      this.elements.taskTitle.focus();
+    }
+  },
+
+  handleAddTask() {
+    const title = this.elements.taskTitle.value.trim();
+    if (!title) return;
+
+    const success = TaskManager.add({
+      id: Date.now() + '',
+      title: title,
+      priority: this.elements.taskPriority.value,
+      category: this.elements.taskCategory.value.trim(),
+      done: false,
+      due: this.elements.taskDue.value || ''
+    });
+
+    if (success) {
+      this.elements.taskTitle.value = '';
+      this.elements.taskCategory.value = '';
+      this.elements.taskDue.value = '';
+      this.elements.taskPriority.value = 'med';
+      this.toggleAddForm();
+      this.render();
+    }
+  },
+
+  handleImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (file.size > CONFIG.LIMITS.MAX_FILE_SIZE) {
+      this.setStatus('file too large', false);
+      setTimeout(() => this.setStatus('saved', true), 2000);
+      event.target.value = '';
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      TaskManager.import(e.target.result);
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  },
+
+  handleTaskClick(e) {
+    const target = e.target;
+
+    // Action buttons
+    if (target.classList.contains('action-btn')) {
+      e.stopPropagation();
+      const taskEl = target.closest('.task');
+      if (!taskEl) return;
+
+      const taskId = taskEl.dataset.id;
+
+      if (target.classList.contains('edit')) {
+        this.startEdit(taskId);
+      } else if (target.classList.contains('save')) {
+        this.saveEdit(taskId);
+      } else if (target.classList.contains('cancel-edit')) {
+        state.editingId = null;
+        this.render();
+      } else if (target.classList.contains('delete')) {
+        TaskManager.delete(taskId);
+      }
+    }
+  },
+
+  handleTaskDblClick(e) {
+    if (e.target.closest('.task-actions') || e.target.closest('.edit-fields')) return;
+
+    const taskEl = e.target.closest('.task');
+    if (taskEl && !taskEl.classList.contains('editing')) {
+      this.startEdit(taskEl.dataset.id);
+    }
+  },
+
+  handleTaskChange(e) {
+    if (e.target.classList.contains('task-checkbox')) {
+      const taskEl = e.target.closest('.task');
+      if (taskEl) {
+        TaskManager.toggle(taskEl.dataset.id);
+      }
+    }
+  },
+
+  handleTaskKeydown(e) {
+    if (e.target.closest('.edit-fields')) {
+      const taskEl = e.target.closest('.task');
+      if (!taskEl) return;
+
+      const taskId = taskEl.dataset.id;
+
+      if (e.key === 'Enter') {
+        this.saveEdit(taskId);
+      } else if (e.key === 'Escape') {
+        state.editingId = null;
+        this.render();
+      }
+    }
+  },
+
+  startEdit(taskId) {
+    state.editingId = state.editingId === taskId ? null : taskId;
+    this.render();
+  },
+
+  saveEdit(taskId) {
+    const taskEl = document.querySelector(`[data-id="${taskId}"]`);
+    if (!taskEl) return;
+
+    const titleInput = taskEl.querySelector('.edit-title');
+    const prioritySelect = taskEl.querySelector('.edit-priority');
+    const categoryInput = taskEl.querySelector('.edit-category');
+    const dueInput = taskEl.querySelector('.edit-due');
+
+    const success = TaskManager.update(taskId, {
+      title: titleInput ? titleInput.value.trim() : '',
+      priority: prioritySelect ? prioritySelect.value : 'med',
+      category: categoryInput ? categoryInput.value.trim() : '',
+      due: dueInput ? dueInput.value : ''
+    });
+
+    if (success) {
+      state.editingId = null;
+      this.render();
+    }
+  },
+
+  setFilter(filterValue) {
+    state.filter = filterValue;
+    this.render();
+  },
+
+  setStatus(text, isSuccess) {
+    this.elements.status.textContent = text;
+    this.elements.status.classList.toggle('success', isSuccess);
+  },
+
+  async showSettings() {
+    this.elements.dropboxKey.value = '';
+
+    try {
+      const key = await Database.load(CONFIG.STORAGE.DROPBOX_KEY);
+      if (key && typeof key === 'string') {
+        this.elements.dropboxKey.value = key;
+      }
+    } catch (error) {
+      console.error('Error loading settings:', error);
+    }
+
+    this.elements.settingsModal.classList.add('visible');
+  },
+
+  hideSettings() {
+    this.elements.settingsModal.classList.remove('visible');
+  },
+
+  async saveSettings() {
+    const key = this.elements.dropboxKey.value.trim();
+
+    try {
+      if (key) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(key)) {
+          this.setStatus('invalid key format', false);
+          setTimeout(() => this.setStatus('saved', true), 3000);
+          return;
+        }
+        await Database.save(CONFIG.STORAGE.DROPBOX_KEY, key);
+        this.setStatus('settings saved', true);
+      } else {
+        await Database.delete(CONFIG.STORAGE.DROPBOX_KEY);
+        this.setStatus('Dropbox key removed', true);
+      }
+
+      state.dropboxScriptLoaded = false;
+      setTimeout(() => this.setStatus('saved', true), 2000);
+    } catch (error) {
+      console.error('Settings save error:', error);
+      this.setStatus('settings error', false);
+    }
+
+    this.hideSettings();
+  },
+
+  getDueMeta(due, done) {
+    if (!due) return null;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dueDate = new Date(due + 'T00:00:00');
+    const diff = Math.round((dueDate - today) / 86400000);
+
+    const formatDate = (iso) => {
+      const d = new Date(iso + 'T00:00:00');
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+
+    if (done) return { label: 'due ' + formatDate(due), cls: '' };
+    if (diff < 0) return { label: 'overdue', cls: 'overdue' };
+    if (diff === 0) return { label: 'due today', cls: 'due-soon' };
+    if (diff <= 7) return { label: 'due ' + formatDate(due), cls: 'due-soon' };
+    return { label: 'due ' + formatDate(due), cls: '' };
+  },
+
+  render() {
+    this.renderStats();
+    this.renderFilters();
+    this.renderTasks();
+  },
+
+  renderStats() {
+    const active = state.tasks.filter(t => !t.done);
+    const high = active.filter(t => t.priority === 'high').length;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const soon = active.filter(t => {
+      if (!t.due) return false;
+      const dueDate = new Date(t.due + 'T00:00:00');
+      return Math.round((dueDate - today) / 86400000) <= 7;
+    }).length;
+
+    this.elements.stats.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Active</div>
+        <div class="stat-value">${active.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">High priority</div>
+        <div class="stat-value">${high}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Due this week</div>
+        <div class="stat-value">${soon}</div>
+      </div>
+    `;
+  },
+
+  renderFilters() {
+    const categories = [...new Set(state.tasks.map(t => t.category).filter(Boolean))];
+    const otherCategories = categories.filter(c => c !== CONFIG.CATEGORIES.IMMEDIATE);
+
+    // Update category datalist
+    this.elements.categoryList.innerHTML = categories
+      .map(c => `<option value="${Security.escapeAttr(c)}">`)
+      .join('');
+
+    const filters = [
+      { key: 'all', label: 'All active', isImmediate: false },
+      { key: 'high', label: 'High', isImmediate: false },
+      { key: 'med', label: 'Medium', isImmediate: false },
+      { key: 'low', label: 'Low', isImmediate: false },
+      { key: 'due-soon', label: 'Due soon', isImmediate: false },
+      { key: CONFIG.CATEGORIES.IMMEDIATE, label: 'Immediate', isImmediate: true },
+      ...otherCategories.map(c => ({ key: c, label: c, isImmediate: false })),
+      { key: 'done', label: 'Done', isImmediate: false }
+    ];
+
+    this.elements.filters.innerHTML = filters
+      .map(f => {
+        const activeClass = state.filter === f.key ? ' active' : '';
+        const immediateClass = f.isImmediate ? ' immediate' : '';
+        return `<button class="filter-btn${activeClass}${immediateClass}" data-filter="${Security.escapeAttr(f.key)}">${Security.escapeHtml(f.label)}</button>`;
+      })
+      .join('');
+
+    // Attach filter click handlers
+    this.elements.filters.addEventListener('click', (e) => {
+      if (e.target.classList.contains('filter-btn')) {
+        this.setFilter(e.target.dataset.filter);
+      }
+    });
+  },
+
+  renderTasks() {
+    const filtered = TaskManager.getFiltered();
+
+    if (filtered.length === 0) {
+      this.elements.taskList.innerHTML = '<div class="empty-state">Nothing here.</div>';
+      return;
+    }
+
+    // Sort tasks
+    const priorityOrder = { high: 0, med: 1, low: 2 };
+    const sorted = [...filtered].sort((a, b) => {
+      // Immediate category first
+      if (a.category === CONFIG.CATEGORIES.IMMEDIATE && b.category !== CONFIG.CATEGORIES.IMMEDIATE) return -1;
+      if (b.category === CONFIG.CATEGORIES.IMMEDIATE && a.category !== CONFIG.CATEGORIES.IMMEDIATE) return 1;
+
+      // Then by due date presence
+      const aHasDue = a.due ? 1 : 0;
+      const bHasDue = b.due ? 1 : 0;
+      if (aHasDue !== bHasDue) return bHasDue - aHasDue;
+
+      // Then by due date value
+      if (a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1;
+
+      // Then by priority
+      return (priorityOrder[a.priority] || 1) - (priorityOrder[b.priority] || 1);
+    });
+
+    // Group by category
+    const byCategory = {};
+    sorted.forEach(task => {
+      const cat = task.category || 'Uncategorized';
+      if (!byCategory[cat]) byCategory[cat] = [];
+      byCategory[cat].push(task);
+    });
+
+    const priorityLabels = { high: 'High', med: 'Medium', low: 'Low' };
+    const categoryOrder = [CONFIG.CATEGORIES.IMMEDIATE, ...Object.keys(byCategory).filter(c => c !== CONFIG.CATEGORIES.IMMEDIATE)];
+
+    let html = '';
+
+    for (const category of categoryOrder) {
+      if (!byCategory[category]) continue;
+
+      const isImmediate = category === CONFIG.CATEGORIES.IMMEDIATE;
+      html += `<div class="task-group-label${isImmediate ? ' immediate' : ''}">${Security.escapeHtml(category)}</div>`;
+
+      byCategory[category].forEach(task => {
+        const dueMeta = this.getDueMeta(task.due, task.done);
+        const isEditing = state.editingId === task.id;
+        const safeId = Security.escapeAttr(task.id);
+
+        let taskClasses = 'task';
+        if (task.done) taskClasses += ' done';
+        if (isImmediate) taskClasses += ' immediate';
+        if (isEditing) taskClasses += ' editing';
+
+        html += `<div class="${taskClasses}" data-id="${safeId}">`;
+        html += `<input type="checkbox" class="task-checkbox" ${task.done ? 'checked' : ''}>`;
+        html += '<div class="task-body">';
+
+        if (isEditing) {
+          html += '<div class="edit-fields">';
+          html += '<div class="edit-row">';
+          html += `<input type="text" class="edit-title" value="${Security.escapeAttr(task.title)}">`;
+          html += '</div>';
+          html += '<div class="edit-row">';
+          html += '<select class="edit-priority">';
+          html += `<option value="high"${task.priority === 'high' ? ' selected' : ''}>High</option>`;
+          html += `<option value="med"${task.priority === 'med' ? ' selected' : ''}>Medium</option>`;
+          html += `<option value="low"${task.priority === 'low' ? ' selected' : ''}>Low</option>`;
+          html += '</select>';
+          html += `<input type="text" class="edit-category" list="category-list" value="${Security.escapeAttr(task.category || '')}" placeholder="Category" style="width:130px" autocomplete="off">`;
+          html += `<label>Due: <input type="date" class="edit-due" value="${Security.escapeAttr(task.due || '')}"></label>`;
+          html += '</div>';
+          html += '</div>';
+        } else {
+          html += `<div class="task-title">${Security.escapeHtml(task.title)}`;
+          if (task.url && Security.isSafeUrl(task.url)) {
+            html += ` <a href="${Security.escapeAttr(task.url)}" target="_blank" rel="noopener noreferrer" class="task-link">↗ link</a>`;
+          }
+          html += '</div>';
+          html += '<div class="task-meta">';
+          html += `<span class="badge ${task.priority}">${priorityLabels[task.priority]}</span>`;
+          if (dueMeta) {
+            html += `<span class="badge due ${dueMeta.cls}">${Security.escapeHtml(dueMeta.label)}</span>`;
+          }
+          html += '</div>';
+        }
+
+        html += '</div>';
+        html += '<div class="task-actions">';
+        if (isEditing) {
+          html += '<button class="action-btn save">Save</button>';
+          html += '<button class="action-btn cancel-edit">Cancel</button>';
+        } else {
+          html += '<button class="action-btn edit">Edit</button>';
+        }
+        html += '<button class="action-btn delete">✕</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+    }
+
+    this.elements.taskList.innerHTML = html;
+
+    // Focus on edit field if editing
+    if (state.editingId) {
+      const editField = this.elements.taskList.querySelector('.edit-title');
+      if (editField) {
+        editField.focus();
+        editField.setSelectionRange(editField.value.length, editField.value.length);
+      }
+    }
+  }
+};
+
+// ============================================================================
+// Application Initialization
+// ============================================================================
+
+document.addEventListener('DOMContentLoaded', async () => {
+  UI.init();
+  await TaskManager.load();
+});
+</script>
+</body>
+</html>

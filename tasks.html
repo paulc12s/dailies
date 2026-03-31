@@ -25,6 +25,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
+<link rel="apple-touch-icon" href="/dailies/checks.png">
+<link rel="icon" type="image/png" href="/dailies/checks.png">
 <title>Task Manager</title>
 <style>
 * {
@@ -47,12 +49,22 @@ body {
 .container {
   max-width: 720px;
   margin: 0 auto;
+  padding-bottom: 0;
+  transition: padding-bottom 0.2s;
+}
+
+.container.has-undo {
+  padding-bottom: 60px;
 }
 
 @media (max-width: 480px) {
   body {
     padding: 12px;
     font-size: 16px; /* Prevents iOS zoom on input focus */
+  }
+
+  .container.has-undo {
+    padding-bottom: 80px;
   }
 }
 
@@ -406,6 +418,15 @@ body {
 .task.editing {
   border-color: #888;
   background: #fafafa;
+}
+
+.task.undo-highlight {
+  animation: undoFlash 0.6s ease;
+}
+
+@keyframes undoFlash {
+  0% { background: #fff9e6; }
+  100% { background: white; }
 }
 
 .task-checkbox {
@@ -910,6 +931,79 @@ body {
 .hidden {
   display: none;
 }
+
+/* Undo Bar */
+.undo-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #1a1714;
+  color: white;
+  padding: 10px 16px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
+  z-index: 900;
+  font-size: 13px;
+  border-top: 1px solid #333;
+}
+
+.undo-bar.visible {
+  display: flex;
+}
+
+.undo-bar-text {
+  flex: 0;
+  color: #aaa;
+}
+
+.undo-bar-action {
+  color: white;
+  font-weight: 500;
+}
+
+.undo-bar-btn {
+  background: white;
+  color: #1a1714;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.undo-bar-btn:hover {
+  background: #f0f0f0;
+}
+
+.undo-bar-btn:active {
+  transform: scale(0.98);
+}
+
+.undo-bar-count {
+  color: #888;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+@media (max-width: 480px) {
+  .undo-bar {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    font-size: 14px;
+  }
+
+  .undo-bar-btn {
+    padding: 8px 18px;
+    font-size: 14px;
+    min-height: 40px;
+  }
+}
 </style>
 </head>
 <body>
@@ -948,6 +1042,12 @@ body {
   <div class="stats" id="stats"></div>
 </div>
 
+<div class="undo-bar" id="undo-bar">
+  <span class="undo-bar-text">Undo last:</span>
+  <span class="undo-bar-action" id="undo-action">Task completed</span>
+  <button class="undo-bar-btn" id="undo-btn">Undo</button>
+  <span class="undo-bar-count" id="undo-count"></span>
+</div>
 
 <script>
 'use strict';
@@ -984,7 +1084,8 @@ const state = {
   tasks: [],
   filter: 'all',
   editingId: null,
-  db: null
+  db: null,
+  undoStack: [] // Stack of undo operations (max 10)
 };
 
 // ============================================================================
@@ -1213,6 +1314,9 @@ const TaskManager = {
     const task = state.tasks.find(t => t.id === id);
     if (!task) return false;
 
+    // Capture previous state
+    const previousTask = { ...task };
+
     const sanitized = Security.sanitizeTask({ ...task, ...updates });
     if (!sanitized) {
       UI.setStatus('invalid task data', false);
@@ -1221,24 +1325,49 @@ const TaskManager = {
 
     Object.assign(task, sanitized);
     this.scheduleSave();
+
+    // Add to undo stack
+    UndoManager.push('Task updated', {
+      type: 'edit',
+      data: { id, previousTask }
+    });
+
     return true;
   },
 
   toggle(id) {
     const task = state.tasks.find(t => t.id === id);
     if (task) {
+      const previousDone = task.done;
       task.done = !task.done;
       state.editingId = null;
       this.scheduleSave();
       UI.render();
+
+      // Add to undo stack
+      const message = task.done ? 'Task completed' : 'Task reopened';
+      UndoManager.push(message, {
+        type: 'toggle',
+        data: { id, previousDone }
+      });
     }
   },
 
   delete(id) {
+    const index = state.tasks.findIndex(t => t.id === id);
+    if (index === -1) return;
+
+    const task = { ...state.tasks[index] };
     state.tasks = state.tasks.filter(t => t.id !== id);
     state.editingId = null;
     this.scheduleSave();
     UI.render();
+
+    // Add to undo stack
+    UndoManager.push('Task deleted', {
+      type: 'delete',
+      data: { task, index }
+    });
   },
 
   getFiltered() {
@@ -1327,6 +1456,111 @@ const TaskManager = {
 };
 
 // ============================================================================
+// Undo Manager
+// ============================================================================
+
+const UndoManager = {
+  push(message, undoData) {
+    // Add to undo stack
+    state.undoStack.push({
+      message: message,
+      ...undoData
+    });
+
+    // Keep only last 10 operations
+    if (state.undoStack.length > 10) {
+      state.undoStack.shift();
+    }
+
+    // Update UI
+    this.updateUI();
+  },
+
+  updateUI() {
+    const bar = document.getElementById('undo-bar');
+    const actionText = document.getElementById('undo-action');
+    const countText = document.getElementById('undo-count');
+    const container = document.querySelector('.container');
+
+    if (state.undoStack.length === 0) {
+      bar.classList.remove('visible');
+      if (container) container.classList.remove('has-undo');
+      return;
+    }
+
+    // Show the last action
+    const lastAction = state.undoStack[state.undoStack.length - 1];
+    actionText.textContent = lastAction.message;
+
+    // Show count if more than 1
+    if (state.undoStack.length > 1) {
+      countText.textContent = `(${state.undoStack.length} available)`;
+    } else {
+      countText.textContent = '';
+    }
+
+    bar.classList.add('visible');
+    if (container) container.classList.add('has-undo');
+  },
+
+  undo() {
+    if (state.undoStack.length === 0) {
+      return;
+    }
+
+    // Pop the last operation from the stack
+    const operation = state.undoStack.pop();
+
+    const { type, data } = operation;
+    let taskId = null;
+    let success = false;
+
+    if (type === 'toggle') {
+      // Restore task completion state
+      const task = state.tasks.find(t => t.id === data.id);
+      if (task) {
+        task.done = data.previousDone;
+        taskId = data.id;
+        success = true;
+      }
+    } else if (type === 'edit') {
+      // Restore all previous task values
+      const task = state.tasks.find(t => t.id === data.id);
+      if (task) {
+        Object.assign(task, data.previousTask);
+        taskId = data.id;
+        success = true;
+      }
+    } else if (type === 'delete') {
+      // Restore deleted task at original position
+      const insertIndex = Math.min(data.index, state.tasks.length);
+      state.tasks.splice(insertIndex, 0, data.task);
+      taskId = data.task.id;
+      success = true;
+    }
+
+    if (success) {
+      TaskManager.scheduleSave();
+      UI.render();
+
+      // Highlight the restored task
+      if (taskId) {
+        setTimeout(() => {
+          const taskEl = document.querySelector(`[data-id="${taskId}"]`);
+          if (taskEl) {
+            taskEl.classList.add('undo-highlight');
+            setTimeout(() => taskEl.classList.remove('undo-highlight'), 600);
+          }
+        }, 100);
+      }
+    }
+
+    // Update UI to show next undo or hide bar
+    this.updateUI();
+  }
+};
+
+// ============================================================================
 // UI Rendering & Interaction
 // ============================================================================
 
@@ -1351,7 +1585,11 @@ const UI = {
       categoryList: document.getElementById('category-list'),
       filters: document.getElementById('filters'),
       taskList: document.getElementById('task-list'),
-      stats: document.getElementById('stats')
+      stats: document.getElementById('stats'),
+      undoBar: document.getElementById('undo-bar'),
+      undoBtn: document.getElementById('undo-btn'),
+      undoAction: document.getElementById('undo-action'),
+      undoCount: document.getElementById('undo-count')
     };
 
     this.attachEventListeners();
@@ -1374,6 +1612,11 @@ const UI = {
     });
     this.elements.taskCategory.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') this.handleAddTask();
+    });
+
+    // Undo
+    this.elements.undoBtn.addEventListener('click', () => {
+      UndoManager.undo();
     });
 
     // Task list (delegated events)
